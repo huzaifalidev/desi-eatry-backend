@@ -7,7 +7,7 @@ const router = express.Router();
 router.post("/", menu.createMenu);
 router.get("/", menu.getMenus);
 router.get("/:id", menu.getMenuById);
-router.put("/:id", verifyAdmin, menu.updateMenu);
-router.delete("/:id", verifyAdmin, menu.deleteMenu);
+router.put("/:id",  menu.updateMenu);
+router.delete("/:id", menu.deleteMenu);
 
 export default router;
