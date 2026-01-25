@@ -11,6 +11,7 @@ export const createCustomer = async (req, res) => {
     const customer = await User.create({
       firstName,
       phone,
+      lastName,
       address,
       role: "CUSTOMER",
       isActive: true,
