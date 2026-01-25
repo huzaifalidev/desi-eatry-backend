@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-
+import Bill from "./bill.model.js";
 const { Schema, model } = mongoose;
 
 // Subdocument for Bill Summary
@@ -36,7 +36,7 @@ const userSchema = new Schema(
     resetToken: String,
     address: { type: String },
     phone: { type: String, unique: true, required: true },
-    bills: [{ type: mongoose.Schema.Types.ObjectId, ref: "Bill" }],
+    bills: [Bill.schema],
     payments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Payment" }],
     summary: { type: billSummarySchema, default: {} },
   },

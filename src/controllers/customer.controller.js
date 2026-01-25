@@ -23,20 +23,78 @@ export const createCustomer = async (req, res) => {
     res.status(400).json({ msg: err.message });
   }
 };
+
+export const createBill = async (req, res) => {
+  try {
+    const { customerId, items, total } = req.body;
+
+    if (!customerId || !items || !Array.isArray(items) || items.length === 0 || !total) {
+      return res.status(400).json({ msg: "Missing required fields" });
+    }
+
+    // Validate customer exists
+    const customer = await User.findById(customerId);
+    if (!customer) return res.status(404).json({ msg: "Customer not found" });
+
+    // Create the bill
+    const bill = await Bill.create({
+      customerId,
+      items: items.map(item => ({
+        menuId: item.menuId || null, // optional, if menu reference exists
+        name: item.name,
+        size: item.size,
+        unit: item.unit,
+        quantity: item.quantity,
+        price: item.price || (item.total / item.quantity), // store per-unit price
+        total: item.total,
+      })),
+      total,
+    });
+
+    // Update customer: push bill and update summary
+    customer.bills.push(bill._id);
+    customer.summary.totalBilled = (customer.summary?.totalBilled || 0) + total;
+    customer.summary.balance = (customer.summary?.balance || 0) + total;
+
+    await customer.save();
+
+    return res.status(201).json({ msg: "Bill created", bill });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ msg: err.message });
+  }
+};
 // Update customer
+
 export const updateCustomer = async (req, res) => {
   try {
     const customer = await User.findById(req.params.id).where({ role: "CUSTOMER" });
     if (!customer) return res.status(404).json({ msg: "Customer not found" });
 
-    Object.assign(customer, req.body); // Update allowed fields
-    await customer.save();
+    // Update totals if sent
+    if (req.body.totalBilled !== undefined) customer.summary.totalBilled = req.body.totalBilled
+    if (req.body.totalPaid !== undefined) customer.summary.totalPaid = req.body.totalPaid
+    if (req.body.balance !== undefined) customer.summary.balance = req.body.balance
 
-    res.status(200).json({ msg: "Customer updated", customer });
+    // Add new bill if sent
+    if (req.body.bill) {
+      customer.bills.push(req.body.bill)  // <-- push the object directly
+    }
+
+    // Update other fields normally
+    const allowedFields = ['firstName', 'lastName', 'phone', 'address', 'isActive'];
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) customer[field] = req.body[field]
+    })
+
+    await customer.save()
+    res.status(200).json({ msg: "Customer updated", customer })
   } catch (err) {
-    res.status(400).json({ msg: err.message });
+    res.status(400).json({ msg: err.message })
   }
-};
+}
+
+
 
 // Get all customers (exclude soft-deleted)
 export const getAllCustomers = async (req, res) => {
