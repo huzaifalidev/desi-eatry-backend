@@ -9,6 +9,7 @@ const app = express();
 app.use(cors({
   origin: ["http://localhost:3000", "https://desi-eatry.huzaifali.tech"],
   methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true, 
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.use(express.json());
