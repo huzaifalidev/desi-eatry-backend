@@ -5,7 +5,7 @@ export const createMenu = async (req, res) => {
   try {
     const menu = await Menu.create({
       ...req.body,
-      createdBy: "69753a83cb9387982c001395" // Replace with req.user.id when authentication is implemented
+      createdBy: req.user.id // Replace with req.user.id when authentication is implemented
     });
 
     res.status(201).json({ msg: "Menu item created", menu });

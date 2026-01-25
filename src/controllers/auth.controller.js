@@ -4,9 +4,9 @@ import User from "../models/user.model.js"; // Mongoose User model
 
 // ---------------- Register User ----------------
 export const registerUser = async (req, res) => {
-  const { firstName, lastName, email, password } = req.body;
+  const { firstName, lastName, email, password, phone } = req.body;
   try {
-    if (!firstName || !lastName || !email || password.length < 6) {
+    if (!firstName || !lastName || !email || !phone|| password.length < 6) {
       return res.status(400).json({ msg: "Invalid input" });
     }
 
@@ -22,6 +22,9 @@ export const registerUser = async (req, res) => {
       lastName,
       email,
       password: hashedPassword,
+      phone,
+      role: "CUSTOMER",
+      isActive: false,
     });
 
     return res.status(200).json({
