@@ -66,7 +66,7 @@ export const fetchAdmin = async (req, res) => {
 
     return res.status(200).json({
       msg: "Admin found",
-      admin: {
+      user: {
         id: admin._id,
         role: admin.role,
         firstName: admin.firstName,

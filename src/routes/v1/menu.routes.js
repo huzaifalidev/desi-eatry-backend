@@ -4,10 +4,9 @@ import * as menu from "../../controllers/menu.controller.js";
 
 const router = express.Router();
 
-router.post("/", menu.createMenu);
+router.post("/", verifyAdmin, menu.createMenu);
 router.get("/", menu.getMenus);
 router.get("/:id", menu.getMenuById);
-router.put("/:id",  menu.updateMenu);
-router.delete("/:id", menu.deleteMenu);
-
+router.put("/:id", verifyAdmin, menu.updateMenu);
+router.delete("/:id", verifyAdmin, menu.deleteMenu);
 export default router;
