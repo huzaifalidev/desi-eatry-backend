@@ -7,7 +7,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ["http://localhost:3000", "https://desi-eatry-dashboard.vercel.app"],
+  origin: ["http://localhost:3000", "https://desi-eatry-dashboard.vercel.app","https://desi-eatry.huzaifali.tech"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true, 
   allowedHeaders: ["Content-Type", "Authorization"],
