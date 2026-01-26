@@ -33,9 +33,8 @@ const userSchema = new Schema(
 
     phone: { type: String, required: true, unique: true },
     address: String,
-
+    deletedAt: Date,
     summary: { type: summarySchema, default: () => ({}) },
-
     isActive: { type: Boolean, default: true },
     accessToken: { type: String },
     refreshToken: { type: String },

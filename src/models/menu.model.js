@@ -21,7 +21,7 @@ const menuSchema = new mongoose.Schema(
 
     unit: {
       type: String,
-      enum: ["plate", "glass", "bowl", "piece"],
+      enum: ["plate", "glass", "bowl", "piece","serving","cup","bottle","box","packet","can"],
       default: "plate"
     },
 
