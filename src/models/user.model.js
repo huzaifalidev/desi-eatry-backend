@@ -1,46 +1,47 @@
+// models/user.model.js
 import mongoose from "mongoose";
-import Bill from "./bill.model.js";
 const { Schema, model } = mongoose;
 
-// Subdocument for Bill Summary
-const billSummarySchema = new Schema(
+const summarySchema = new Schema(
   {
     totalBilled: { type: Number, default: 0 },
     totalPaid: { type: Number, default: 0 },
     balance: { type: Number, default: 0 },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const userSchema = new Schema(
   {
-    firstName: { type: String, },
-    lastName: { type: String, },
+    firstName: String,
+    lastName: String,
+
     email: {
       type: String,
-      required: function () {
-        return this.role === "ADMIN" || this.role === "STAFF";
-      }
+      required() {
+        return this.role !== "CUSTOMER";
+      },
     },
-    password: { type: String },
+
+    password: String,
+
     role: {
       type: String,
       enum: ["ADMIN", "STAFF", "CUSTOMER"],
       default: "CUSTOMER",
     },
-    isActive: { type: Boolean, default: false },
-    lastLogin: Date,
-    deletedAt: Date,
-    accessToken: String,
-    refreshToken: String,
-    resetToken: String,
-    address: { type: String },
-    phone: { type: String, unique: true, required: true },
-    bills: [Bill.schema],
-    payments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Payment" }],
-    summary: { type: billSummarySchema, default: {} },
+
+    phone: { type: String, required: true, unique: true },
+    address: String,
+
+    summary: { type: summarySchema, default: () => ({}) },
+
+    isActive: { type: Boolean, default: true },
+    accessToken: { type: String },
+    refreshToken: { type: String },
+    resetToken: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default model("User", userSchema);

@@ -3,12 +3,15 @@ import User from "../models/user.model.js";
 
 export const createBill = async (req, res) => {
   try {
-    const { customerId, items } = req.body;
+    const { customerId, items, date } = req.body;
 
-    if (!customerId) return res.status(400).json({ msg: "Customer ID is required" });
-    if (!items || items.length === 0) return res.status(400).json({ msg: "No items provided" });
+    if (!customerId)
+      return res.status(400).json({ msg: "Customer ID is required" });
 
-    // Calculate total
+    if (!items || items.length === 0)
+      return res.status(400).json({ msg: "No items provided" });
+
+    // Prepare items
     const billItems = items.map(item => ({
       menuId: item.menuId,
       name: item.name,
@@ -21,25 +24,55 @@ export const createBill = async (req, res) => {
 
     const totalAmount = billItems.reduce((sum, i) => sum + i.total, 0);
 
-    // 1️⃣ Create the bill
+    // ✅ Create bill with OPTIONAL date
     const bill = await Bill.create({
       customerId,
       items: billItems,
       total: totalAmount,
+      ...(date && { date: new Date(date) }), // 👈 key line
     });
 
-    // 2️⃣ Update the customer
+    // Update customer summary
     await User.findByIdAndUpdate(customerId, {
-      $push: { bills: bill._id }, // push ONLY the ID
       $inc: {
         "summary.totalBilled": totalAmount,
         "summary.balance": totalAmount,
       },
     });
 
-    return res.status(201).json({ msg: "Bill created successfully", bill });
+    return res.status(201).json({
+      msg: "Bill created successfully",
+      bill,
+    });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ msg: err.message });
+  }
+};
+// GET ALL BILLS
+export const getAllBills = async (req, res) => {
+  try {
+    const bills = await Bill.find()
+      .populate("customerId", "firstName lastName phone")
+      .populate("items.menuId", "name half full unit")
+      .sort({ date: -1 });
+
+    res.status(200).json({ bills ,msg:"Bills fetched"});
+  } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
+};
+// GET BILL BY ID
+export const getBillById = async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.id)
+      .populate("customerId", "firstName lastName phone")
+      .populate("items.menuId", "name half full unit");
+
+    if (!bill) return res.status(404).json({ msg: "Bill not found" });
+
+    res.status(200).json({ bill, msg: "Bill fetched" });
+  } catch (err) {
     res.status(500).json({ msg: err.message });
   }
 };

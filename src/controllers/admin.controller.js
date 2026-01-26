@@ -1,18 +1,25 @@
-// controllers/admin.controller.js
-import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
-// ---------------- Admin Signin ----------------
+/* ======================================================
+   ADMIN SIGNIN
+====================================================== */
 export const signin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const admin = await User.findOne({ email, role: "ADMIN", isActive: true });
+    const admin = await User.findOne({
+      email,
+      role: "ADMIN",
+      deletedAt: { $exists: false },
+    });
+
     if (!admin) return res.status(401).json({ msg: "Invalid credentials" });
 
     const isPasswordValid = await bcrypt.compare(password, admin.password);
-    if (!isPasswordValid) return res.status(401).json({ msg: "Invalid credentials" });
+    if (!isPasswordValid)
+      return res.status(401).json({ msg: "Invalid credentials" });
 
     const payload = {
       id: admin._id,
@@ -37,7 +44,7 @@ export const signin = async (req, res) => {
     await admin.save();
 
     return res.status(200).json({
-      msg: "Admin signed in success",
+      msg: "Admin signed in successfully",
       admin: {
         id: admin._id,
         role: admin.role,
@@ -51,44 +58,92 @@ export const signin = async (req, res) => {
       refreshToken,
     });
   } catch (error) {
-    return res.status(500).json({ msg: "Error signing in admin", error: error.message });
+    return res
+      .status(500)
+      .json({ msg: "Error signing in admin", error: error.message });
   }
 };
 
-// ---------------- Fetch Admin ----------------
-export const fetchAdmin = async (req, res) => {
+// ---------------- ADMIN SIGNUP ----------------
+export const signup = async (req, res) => {
   try {
-    console.log("Fetching admin with user:", req.user);
-    const { id } = req.user;
+    const { firstName, lastName, email, password, phone } = req.body;
 
-    const admin = await User.findById(id);
-    if (!admin) return res.status(404).json({ msg: "Admin not found" });
+    if (!firstName || !lastName || !email || !password || !phone) {
+      return res.status(400).json({ msg: "All fields are required" });
+    }
 
-    return res.status(200).json({
-      msg: "Admin found",
-      user: {
+    if (password.length < 6) {
+      return res
+        .status(400)
+        .json({ msg: "Password must be at least 6 characters" });
+    }
+
+    const existingAdmin = await User.findOne({ email });
+    if (existingAdmin)
+      return res.status(400).json({ msg: "Admin already exists" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const admin = await User.create({
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      phone,
+      role: "ADMIN",
+      isActive: false,
+    });
+
+    res.status(201).json({
+      msg: "Admin created successfully",
+      admin: {
         id: admin._id,
-        role: admin.role,
         firstName: admin.firstName,
         lastName: admin.lastName,
         email: admin.email,
-        lastLogin: admin.lastLogin,
+        phone: admin.phone,
+        role: admin.role,
         isActive: admin.isActive,
-        createdAt: admin.createdAt,
-        updatedAt: admin.updatedAt,
       },
     });
-  } catch (error) {
-    return res.status(500).json({ msg: "Error fetching admin", error: error.message });
+  } catch (err) {
+    res.status(500).json({ msg: "Admin signup failed", error: err.message });
   }
 };
 
-// ---------------- Admin Logout ----------------
+/* ======================================================
+   FETCH LOGGED-IN ADMIN
+====================================================== */
+export const fetchAdmin = async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    const admin = await User.findById(id).select("-password");
+    if (!admin || admin.role !== "ADMIN")
+      return res.status(403).json({ msg: "Access denied" });
+
+    return res.status(200).json({
+      msg: "Admin fetched successfully",
+      admin,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ msg: "Error fetching admin", error: error.message });
+  }
+};
+
+/* ======================================================
+   ADMIN LOGOUT
+====================================================== */
 export const logout = async (req, res) => {
   try {
     const { id } = req.user;
     const admin = await User.findById(id);
-    if (!admin) return res.status(404).json({ msg: "Admin not found" });
+
+    if (!admin || admin.role !== "ADMIN")
+      return res.status(403).json({ msg: "Access denied" });
 
     admin.accessToken = null;
     admin.refreshToken = null;
@@ -96,40 +151,101 @@ export const logout = async (req, res) => {
 
     return res.status(200).json({ msg: "Admin logged out successfully" });
   } catch (error) {
-    return res.status(500).json({ msg: "Error signing out admin", error: error.message });
+    return res
+      .status(500)
+      .json({ msg: "Error logging out admin", error: error.message });
   }
 };
 
-// ---------------- Refresh Token ----------------
+/* ======================================================
+   REFRESH TOKEN
+====================================================== */
 export const refreshToken = async (req, res) => {
-  const { refreshToken } = req.body;
-  if (!refreshToken) return res.status(400).json({ msg: "Refresh token is required" });
-
   try {
-    const payload = jwt.verify(refreshToken, process.env.JWT_SECRET);
-    const user = await User.findById(payload.id);
+    // The middleware already set req.user
+    const { id } = req.user;
+    const admin = await User.findById(id);
 
-    if (!user || user.refreshToken !== refreshToken || !user.isActive) {
-      return res.status(403).json({ msg: "Invalid refresh token" });
+    if (!admin || !admin.refreshToken || admin.role !== "ADMIN") {
+      return res.status(403).json({ msg: "Invalid or expired refresh token" });
     }
 
+    // Verify refresh token stored in DB
+    const payload = jwt.verify(admin.refreshToken, process.env.JWT_SECRET);
+
+    // Generate new access token
     const newAccessToken = jwt.sign(
       {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        id: admin._id,
+        email: admin.email,
+        role: admin.role,
+        firstName: admin.firstName,
+        lastName: admin.lastName,
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
+      { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" },
     );
 
-    user.accessToken = newAccessToken;
-    await user.save();
+    admin.accessToken = newAccessToken;
+    await admin.save();
 
     res.status(200).json({ accessToken: newAccessToken });
   } catch (err) {
+    console.error("Refresh token error:", err);
     res.status(403).json({ msg: "Refresh failed", error: err.message });
+  }
+};
+
+/* ======================================================
+   ADMIN FORGOT PASSWORD
+====================================================== */
+export const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  try {
+    const admin = await User.findOne({ email, role: "ADMIN" });
+    if (!admin) return res.status(404).json({ msg: "Admin not found" });
+
+    const resetToken = jwt.sign(
+      { id: admin._id, role: admin.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_RESET_EXPIRATION || "1h" },
+    );
+
+    admin.resetToken = resetToken;
+    await admin.save();
+
+    res
+      .status(200)
+      .json({ msg: "Password reset token generated", token: resetToken });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ msg: "Forgot password failed", error: error.message });
+  }
+};
+
+/* ======================================================
+   ADMIN RESET PASSWORD
+====================================================== */
+export const resetPassword = async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword)
+    return res.status(400).json({ msg: "Token and new password required" });
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const admin = await User.findById(payload.id);
+
+    if (!admin || admin.resetToken !== token || admin.role !== "ADMIN") {
+      return res.status(403).json({ msg: "Invalid or expired token" });
+    }
+
+    admin.password = await bcrypt.hash(newPassword, 10);
+    admin.resetToken = null;
+    await admin.save();
+
+    res.status(200).json({ msg: "Password reset successful" });
+  } catch (error) {
+    res.status(403).json({ msg: "Reset failed", error: error.message });
   }
 };

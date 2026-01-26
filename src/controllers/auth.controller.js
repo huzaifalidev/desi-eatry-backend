@@ -1,256 +1,195 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import User from "../models/user.model.js"; // Mongoose User model
+import User from "../models/user.model.js";
 
-// ---------------- Register User ----------------
-export const registerUser = async (req, res) => {
-  const { firstName, lastName, email, password, phone } = req.body;
-  try {
-    if (!firstName || !lastName || !email || !phone|| password.length < 6) {
-      return res.status(400).json({ msg: "Invalid input" });
-    }
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ msg: "User already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      phone,
-      role: "CUSTOMER",
-      isActive: false,
-    });
-
-    return res.status(200).json({
-      msg: "User registered successfully",
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-      },
-    });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ msg: "Error registering user", error: error.message });
-  }
-};
-
-// ---------------- Login User ----------------
-export const loginUser = async (req, res) => {
+/* ======================================================
+   ADMIN LOGIN
+====================================================== */
+export const adminLogin = async (req, res) => {
   const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ msg: "User not found" });
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid)
-      return res.status(401).json({ msg: "Invalid password" });
+  try {
+    const admin = await User.findOne({
+      email,
+      role: { $in: ["ADMIN", "STAFF"] },
+      deletedAt: { $exists: false },
+    });
+
+    if (!admin) {
+      return res.status(404).json({ msg: "Admin not found" });
+    }
+
+    const isValid = await bcrypt.compare(password, admin.password);
+    if (!isValid) {
+      return res.status(401).json({ msg: "Invalid credentials" });
+    }
 
     const payload = {
-      id: user._id,
-      email: user.email,
-      role: user.role,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      id: admin._id,
+      role: admin.role,
+      email: admin.email,
+      firstName: admin.firstName,
+      lastName: admin.lastName,
     };
 
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m",
     });
+
     const refreshToken = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_REFRESH_EXPIRATION || "7d",
     });
 
-    user.accessToken = accessToken;
-    user.refreshToken = refreshToken;
-    user.lastLogin = new Date();
-    user.isActive = true;
-    await user.save();
+    admin.accessToken = accessToken;
+    admin.refreshToken = refreshToken;
+    admin.lastLogin = new Date();
+    admin.isActive = true;
+    await admin.save();
 
-    return res.status(200).json({
-      msg: "User logged in successfully",
-      user: {
-        id: user._id,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        accessToken,
-        refreshToken,
+    res.status(200).json({
+      msg: "Admin logged in successfully",
+      admin: {
+        id: admin._id,
+        role: admin.role,
+        firstName: admin.firstName,
+        lastName: admin.lastName,
+        email: admin.email,
       },
+      accessToken,
+      refreshToken,
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ msg: "Error signing in user", error: error.message });
+    res.status(500).json({ msg: "Admin login failed", error: error.message });
   }
 };
 
-// ---------------- Refresh Token ----------------
-export const refreshToken = async (req, res) => {
+export const adminRefreshToken = async (req, res) => {
   const authHeader = req.headers.authorization;
+
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res
-      .status(400)
-      .json({ msg: "Refresh token is required in Authorization header" });
+    return res.status(400).json({ msg: "Refresh token required" });
   }
+
   const refreshToken = authHeader.split(" ")[1];
 
   try {
     const payload = jwt.verify(refreshToken, process.env.JWT_SECRET);
-    const user = await User.findById(payload.id);
-    if (!user || user.refreshToken !== refreshToken || !user.isActive) {
+
+    const admin = await User.findById(payload.id);
+    if (
+      !admin ||
+      admin.refreshToken !== refreshToken ||
+      !["ADMIN", "STAFF"].includes(admin.role)
+    ) {
       return res.status(403).json({ msg: "Invalid refresh token" });
     }
 
     const newAccessToken = jwt.sign(
       {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        id: admin._id,
+        role: admin.role,
+        email: admin.email,
+        firstName: admin.firstName,
+        lastName: admin.lastName,
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" }
     );
 
-    user.accessToken = newAccessToken;
-    await user.save();
+    admin.accessToken = newAccessToken;
+    await admin.save();
 
-    return res
-      .status(200)
-      .json({ msg: "Refresh success", accessToken: newAccessToken });
+    res.status(200).json({
+      msg: "Token refreshed",
+      accessToken: newAccessToken,
+    });
   } catch (error) {
-    return res
-      .status(403)
-      .json({ msg: "Refresh failed", error: error.message });
+    res.status(403).json({ msg: "Refresh failed", error: error.message });
   }
 };
 
-// ---------------- Logout User ----------------
-export const userLogout = async (req, res) => {
-  if (!req.user || !req.user.id)
-    return res.status(401).json({ msg: "Unauthorized" });
-
+export const adminLogout = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    const admin = await User.findById(req.user.id);
+    if (!admin) return res.status(404).json({ msg: "Admin not found" });
 
-    user.accessToken = null;
-    user.refreshToken = null;
-    await user.save();
+    admin.accessToken = null;
+    admin.refreshToken = null;
+    await admin.save();
 
-    res.status(200).json({ msg: "Logged out successfully" });
+    res.status(200).json({ msg: "Admin logged out successfully" });
   } catch (error) {
     res.status(500).json({ msg: "Logout failed", error: error.message });
   }
 };
 
-// ---------------- Forgot Password ----------------
-export const forgotPassword = async (req, res) => {
-  const { email } = req.body;
+export const fetchAdmin = async (req, res) => {
   try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    const admin = await User.findById(req.user.id).select("-password");
 
-    if (user.resetToken) {
-      try {
-        jwt.verify(user.resetToken, process.env.JWT_SECRET);
-        return res
-          .status(200)
-          .json({ msg: "Password reset token sent", token: user.resetToken });
-      } catch (err) {
-        // token expired, continue to create new
-      }
+    if (!admin || !["ADMIN", "STAFF"].includes(admin.role)) {
+      return res.status(403).json({ msg: "Access denied" });
     }
 
+    res.status(200).json({
+      msg: "Admin fetched",
+      admin,
+    });
+  } catch (error) {
+    res.status(500).json({ msg: "Fetch failed", error: error.message });
+  }
+};
+
+export const adminForgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const admin = await User.findOne({
+      email,
+      role: { $in: ["ADMIN", "STAFF"] },
+    });
+
+    if (!admin) return res.status(404).json({ msg: "Admin not found" });
+
     const resetToken = jwt.sign(
-      {
-        id: user._id,
-        email,
-        role: user.role,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
+      { id: admin._id, role: admin.role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_RESET_EXPIRATION || "1h" }
     );
 
-    user.resetToken = resetToken;
-    await user.save();
+    admin.resetToken = resetToken;
+    await admin.save();
 
-    // TODO: Send email with resetToken
-    res
-      .status(200)
-      .json({ msg: "Password reset token sent", token: resetToken });
+    res.status(200).json({
+      msg: "Reset token generated",
+      token: resetToken, // send via email in production
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ msg: "Password reset failed", error: error.message });
+    res.status(500).json({ msg: "Reset failed", error: error.message });
   }
 };
 
-// ---------------- Reset Password ----------------
-export const resetPassword = async (req, res) => {
+export const adminResetPassword = async (req, res) => {
   const { token, newPassword } = req.body;
-  if (!token || !newPassword)
-    return res.status(400).json({ msg: "Token and new password required" });
+
+  if (!token || newPassword.length < 6) {
+    return res.status(400).json({ msg: "Invalid input" });
+  }
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(payload.id);
+    const admin = await User.findById(payload.id);
 
-    if (!user || user.resetToken !== token) {
+    if (!admin || admin.resetToken !== token) {
       return res.status(403).json({ msg: "Invalid or expired token" });
     }
 
-    const isSamePassword = await bcrypt.compare(newPassword, user.password);
-    if (isSamePassword)
-      return res.status(400).json({ msg: "New password must differ from old" });
-
-    user.password = await bcrypt.hash(newPassword, 10);
-    user.resetToken = null;
-    await user.save();
+    admin.password = await bcrypt.hash(newPassword, 10);
+    admin.resetToken = null;
+    await admin.save();
 
     res.status(200).json({ msg: "Password reset successful" });
   } catch (error) {
     res.status(403).json({ msg: "Reset failed", error: error.message });
-  }
-};
-
-// ---------------- Fetch User ----------------
-export const fetchUser = async (req, res) => {
-  if (!req.user || !req.user.id)
-    return res.status(401).json({ msg: "Unauthorized" });
-
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ msg: "User not found" });
-
-    res.status(200).json({
-      msg: "User found",
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-        lastLogin: user.lastLogin,
-        updatedAt: user.updatedAt,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ msg: "Error fetching user", error: error.message });
   }
 };
