@@ -2,7 +2,34 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
-/* ======================================================
+// Cookie configuration helper
+const getCookieConfig = (req) => {
+  const isSecure =
+    req.secure ||
+    req.headers["x-forwarded-proto"] === "https";
+
+  return {
+    httpOnly: true,
+    secure: isSecure,              // true on Railway HTTPS
+    sameSite: isSecure ? "none" : "lax",
+    maxAge: 24 * 60 * 60 * 1000,   // 1 day
+  };
+};
+
+const getRefreshCookieConfig = (req) => {
+  const isSecure =
+    req.secure ||
+    req.headers["x-forwarded-proto"] === "https";
+
+  return {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: isSecure ? "none" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  };
+};
+
+/* ======================================================  
    ADMIN SIGNIN
 ====================================================== */
 export const signin = async (req, res) => {
@@ -43,19 +70,8 @@ export const signin = async (req, res) => {
     admin.isActive = true;
     await admin.save();
 
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
-
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("accessToken", accessToken, getCookieConfig(req));
+    res.cookie("refreshToken", refreshToken, getRefreshCookieConfig(req));
 
     return res.status(200).json({
       msg: "Admin signed in successfully",
@@ -124,7 +140,7 @@ export const signup = async (req, res) => {
   }
 };
 
-/* ======================================================
+/* ======================================================  
    FETCH LOGGED-IN ADMIN
 ====================================================== */
 export const fetchAdmin = async (req, res) => {
@@ -146,7 +162,7 @@ export const fetchAdmin = async (req, res) => {
   }
 };
 
-/* ======================================================
+/* ======================================================  
    ADMIN LOGOUT
 ====================================================== */
 export const logout = async (req, res) => {
@@ -158,8 +174,8 @@ export const logout = async (req, res) => {
     admin.refreshToken = null;
     await admin.save();
 
-    res.clearCookie("accessToken");
-    res.clearCookie("refreshToken");
+    res.clearCookie("accessToken", getCookieConfig(req));
+    res.clearCookie("refreshToken", getRefreshCookieConfig(req));
 
     return res.status(200).json({ msg: "Logged out successfully" });
   } catch (err) {
@@ -168,7 +184,7 @@ export const logout = async (req, res) => {
 };
 
 
-/* ======================================================
+/* ======================================================  
    REFRESH TOKEN
 ====================================================== */
 export const refreshToken = async (req, res) => {
@@ -202,12 +218,7 @@ export const refreshToken = async (req, res) => {
     admin.accessToken = newAccessToken;
     await admin.save();
 
-    res.cookie("accessToken", newAccessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
+    res.cookie("accessToken", newAccessToken, getCookieConfig(req));
 
     return res.status(200).json({ msg: "Token refreshed" });
   } catch (err) {
@@ -216,7 +227,7 @@ export const refreshToken = async (req, res) => {
 };
 
 
-/* ======================================================
+/* ======================================================  
    ADMIN FORGOT PASSWORD
 ====================================================== */
 export const forgotPassword = async (req, res) => {
@@ -244,7 +255,7 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-/* ======================================================
+/* ======================================================  
    ADMIN RESET PASSWORD
 ====================================================== */
 export const resetPassword = async (req, res) => {
