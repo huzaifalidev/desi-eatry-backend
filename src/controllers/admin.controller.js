@@ -43,6 +43,20 @@ export const signin = async (req, res) => {
     admin.isActive = true;
     await admin.save();
 
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     return res.status(200).json({
       msg: "Admin signed in successfully",
       admin: {
@@ -54,8 +68,6 @@ export const signin = async (req, res) => {
         lastLogin: admin.lastLogin,
         isActive: admin.isActive,
       },
-      accessToken,
-      refreshToken,
     });
   } catch (error) {
     return res
@@ -142,38 +154,39 @@ export const logout = async (req, res) => {
     const { id } = req.user;
     const admin = await User.findById(id);
 
-    if (!admin || admin.role !== "ADMIN")
-      return res.status(403).json({ msg: "Access denied" });
-
     admin.accessToken = null;
     admin.refreshToken = null;
     await admin.save();
 
-    return res.status(200).json({ msg: "Admin logged out successfully" });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ msg: "Error logging out admin", error: error.message });
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    return res.status(200).json({ msg: "Logged out successfully" });
+  } catch (err) {
+    return res.status(500).json({ msg: "Logout failed" });
   }
 };
+
 
 /* ======================================================
    REFRESH TOKEN
 ====================================================== */
 export const refreshToken = async (req, res) => {
   try {
-    // The middleware already set req.user
-    const { id } = req.user;
-    const admin = await User.findById(id);
+    const token = req.cookies.refreshToken;
 
-    if (!admin || !admin.refreshToken || admin.role !== "ADMIN") {
-      return res.status(403).json({ msg: "Invalid or expired refresh token" });
+    if (!token) {
+      return res.status(401).json({ msg: "Refresh token missing" });
     }
 
-    // Verify refresh token stored in DB
-    const payload = jwt.verify(admin.refreshToken, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Generate new access token
+    const admin = await User.findById(payload.id);
+
+    if (!admin || admin.refreshToken !== token) {
+      return res.status(403).json({ msg: "Invalid refresh token" });
+    }
+
     const newAccessToken = jwt.sign(
       {
         id: admin._id,
@@ -183,18 +196,25 @@ export const refreshToken = async (req, res) => {
         lastName: admin.lastName,
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "15m" },
+      { expiresIn: process.env.JWT_ACCESS_EXPIRATION || "1d" },
     );
 
     admin.accessToken = newAccessToken;
     await admin.save();
 
-    res.status(200).json({ accessToken: newAccessToken });
+    res.cookie("accessToken", newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    return res.status(200).json({ msg: "Token refreshed" });
   } catch (err) {
-    console.error("Refresh token error:", err);
-    res.status(403).json({ msg: "Refresh failed", error: err.message });
+    return res.status(403).json({ msg: "Refresh failed" });
   }
 };
+
 
 /* ======================================================
    ADMIN FORGOT PASSWORD
