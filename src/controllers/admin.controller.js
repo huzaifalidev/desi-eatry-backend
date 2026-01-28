@@ -3,31 +3,24 @@ import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
 // Cookie configuration helper
-const getCookieConfig = (req) => {
-  const isSecure =
-    req.secure ||
-    req.headers["x-forwarded-proto"] === "https";
+const isProd = process.env.NODE_ENV === "production";
 
-  return {
-    httpOnly: true,
-    secure: isSecure,              // true on Railway HTTPS
-    sameSite: isSecure ? "none" : "lax",
-    maxAge: 24 * 60 * 60 * 1000,   // 1 day
-  };
-};
+const getCookieConfig = () => ({
+  httpOnly: true,
+  secure: isProd,        // ✅ FORCE TRUE IN PROD
+  sameSite: isProd ? "none" : "lax",
+  path: "/",
+  maxAge: 24 * 60 * 60 * 1000,
+});
 
-const getRefreshCookieConfig = (req) => {
-  const isSecure =
-    req.secure ||
-    req.headers["x-forwarded-proto"] === "https";
+const getRefreshCookieConfig = () => ({
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? "none" : "lax",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+});
 
-  return {
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: isSecure ? "none" : "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  };
-};
 
 /* ======================================================  
    ADMIN SIGNIN
