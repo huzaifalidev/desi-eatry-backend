@@ -1,3 +1,4 @@
+// src/app.js
 import express from "express";
 import apiRoutesV1 from "./routes/v1/index.js";
 import { rateLimiter } from "./middlewares/rate.limiter.js";
@@ -13,19 +14,12 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin like Postman
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
+
 
 app.use(cookieParser());
 app.use(express.json());

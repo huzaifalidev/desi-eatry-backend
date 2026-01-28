@@ -62,10 +62,8 @@ export const signin = async (req, res) => {
     admin.lastLogin = new Date();
     admin.isActive = true;
     await admin.save();
-
-    res.cookie("accessToken", accessToken, getCookieConfig(req));
-    res.cookie("refreshToken", refreshToken, getRefreshCookieConfig(req));
-
+    res.cookie("accessToken", accessToken, getCookieConfig());
+    res.cookie("refreshToken", refreshToken, getRefreshCookieConfig());
     return res.status(200).json({
       msg: "Admin signed in successfully",
       admin: {

@@ -12,15 +12,18 @@ import { verifyAdmin } from "../../middlewares/admin.middleware.js";
 
 const router = express.Router();
 
-// Admin authentication
+// ----------------- Admin Authentication -----------------
 router.post("/signin", signin);
 router.post("/signup", signup);
-router.post("/refresh-token",verifyAdmin("refresh"), refreshToken);
-router.post("/logout", verifyAdmin(), logout);
 
-// Admin profile
+// Refresh token should NOT require verifyAdmin middleware
+router.post("/refresh-token", refreshToken);
+
+// Logout and profile require valid access token
+router.post("/logout", verifyAdmin(), logout);
 router.get("/me", verifyAdmin(), fetchAdmin);
-// Password management
+
+// ----------------- Password Management -----------------
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
