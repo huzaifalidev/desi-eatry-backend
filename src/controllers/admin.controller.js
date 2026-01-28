@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
 // Cookie configuration helper
-const isProd = process.env.NODE_ENV === "production";
+const isProd = process.env.NODE_ENV === "production" || "development";;
 
 const getCookieConfig = () => ({
   httpOnly: true,

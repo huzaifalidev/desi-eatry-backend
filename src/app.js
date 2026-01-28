@@ -5,13 +5,28 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 const app = express();
 
-// Middleware
+// Middlewares
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://desi-eatry-dashboard.vercel.app",
+  "https://desi-eatry.huzaifali.tech"
+];
+
 app.use(cors({
-  origin: ["http://localhost:3000", "https://desi-eatry-dashboard.vercel.app","https://desi-eatry.huzaifali.tech"],
+  origin: function (origin, callback) {
+    // Allow requests with no origin like Postman
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true, 
+  credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
+
 app.use(cookieParser());
 app.use(express.json());
 app.set("trust proxy", 1);
