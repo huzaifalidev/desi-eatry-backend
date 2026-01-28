@@ -3,7 +3,6 @@ import express from "express";
 import apiRoutesV1 from "./routes/v1/index.js";
 import { rateLimiter } from "./middlewares/rate.limiter.js";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 const app = express();
 
 // Middlewares
@@ -20,8 +19,6 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-
-app.use(cookieParser());
 app.use(express.json());
 app.set("trust proxy", 1);
 app.use(rateLimiter(5, 1, "Too many requests!"));
