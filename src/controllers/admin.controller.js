@@ -2,25 +2,14 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
-// Cookie configuration helper
-const isProd = process.env.NODE_ENV === "production";
-
-const getCookieConfig = () => ({
+// Cookie configuration for production (works with HTTPS & cross-origin)
+const cookieOptions = {
   httpOnly: true,
-  secure: isProd,        // ✅ FORCE TRUE IN PROD
-  sameSite: isProd ? "none" : "lax",
-  path: "/",
-  maxAge: 24 * 60 * 60 * 1000,
-});
-
-const getRefreshCookieConfig = () => ({
-  httpOnly: true,
-  secure: isProd,
-  sameSite: isProd ? "none" : "lax",
-  path: "/",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
-
+  secure: true,        // ✅ only HTTPS in production
+  sameSite: 'none',    // ✅ cross-origin
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  path: '/',
+};
 
 /* ======================================================  
    ADMIN SIGNIN
@@ -62,8 +51,11 @@ export const signin = async (req, res) => {
     admin.lastLogin = new Date();
     admin.isActive = true;
     await admin.save();
-    res.cookie("accessToken", accessToken, getCookieConfig());
-    res.cookie("refreshToken", refreshToken, getRefreshCookieConfig());
+
+    // ✅ Set cookies properly
+    res.cookie("accessToken", accessToken, cookieOptions);
+    res.cookie("refreshToken", refreshToken, cookieOptions);
+
     return res.status(200).json({
       msg: "Admin signed in successfully",
       admin: {
@@ -83,7 +75,9 @@ export const signin = async (req, res) => {
   }
 };
 
-// ---------------- ADMIN SIGNUP ----------------
+/* ======================================================  
+   ADMIN SIGNUP
+====================================================== */
 export const signup = async (req, res) => {
   try {
     const { firstName, lastName, email, password, phone } = req.body;
@@ -165,15 +159,15 @@ export const logout = async (req, res) => {
     admin.refreshToken = null;
     await admin.save();
 
-    res.clearCookie("accessToken", getCookieConfig(req));
-    res.clearCookie("refreshToken", getRefreshCookieConfig(req));
+    // ✅ Clear cookies with same options
+    res.clearCookie("accessToken", cookieOptions);
+    res.clearCookie("refreshToken", cookieOptions);
 
     return res.status(200).json({ msg: "Logged out successfully" });
   } catch (err) {
     return res.status(500).json({ msg: "Logout failed" });
   }
 };
-
 
 /* ======================================================  
    REFRESH TOKEN
@@ -187,7 +181,6 @@ export const refreshToken = async (req, res) => {
     }
 
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-
     const admin = await User.findById(payload.id);
 
     if (!admin || admin.refreshToken !== token) {
@@ -209,14 +202,13 @@ export const refreshToken = async (req, res) => {
     admin.accessToken = newAccessToken;
     await admin.save();
 
-    res.cookie("accessToken", newAccessToken, getCookieConfig(req));
+    res.cookie("accessToken", newAccessToken, cookieOptions);
 
     return res.status(200).json({ msg: "Token refreshed" });
   } catch (err) {
     return res.status(403).json({ msg: "Refresh failed" });
   }
 };
-
 
 /* ======================================================  
    ADMIN FORGOT PASSWORD
