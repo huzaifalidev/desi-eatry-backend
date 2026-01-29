@@ -8,10 +8,10 @@ import {
     deleteMenu,
 } from "../../controllers/menu.controller.js";
 const router = express.Router();
-
-router.post("/", verifyAdmin(), createMenu);
+router.use(verifyAdmin());
+router.post("/", createMenu);
 router.get("/", getMenus);
 router.get("/:id", getMenuById);
-router.put("/:id", verifyAdmin(), updateMenu);
-router.delete("/:id", verifyAdmin(), deleteMenu);
+router.put("/:id", updateMenu);
+router.delete("/:id", deleteMenu);
 export default router;
